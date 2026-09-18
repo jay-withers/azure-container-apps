@@ -1,0 +1,33 @@
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# *.tfvars files are committed intentionally (dev/stg/prd environment inputs —
+# see terraform/environments/*.tfvars). Do not put secrets in them; use Azure
+# Key Vault or ARM_* environment variables instead. gitleaks (pre-commit and CI)
+# scans every commit as a backstop.
+
+# CLI configuration and override files
+.terraformrc
+terraform.rc
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Provider lock file is committed: terraform/ is a deployable root
+# configuration, so CI and every contributor resolve the same provider versions.
+
+# Saved plan output
+*.tfplan
+
+# macOS finder metadata
+.DS_Store
+**/.DS_Store
