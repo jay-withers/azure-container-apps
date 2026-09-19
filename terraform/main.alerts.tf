@@ -86,8 +86,22 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
     # failure itself, the job giving up, and the replica's own failure record.
     # `Log_s` is projected so the alert payload carries the actual error rather
     # than only a count.
+    #
+    # `union isfuzzy=true` rather than referencing the table directly:
+    # `ContainerAppSystemLogs_CL` is created lazily on first ingestion, so it
+    # does not exist until some tenant's job has crashed at least once. A plain
+    # reference fails rule creation itself with "Failed to resolve table" the
+    # moment the workspace is new — verified on this environment before any
+    # tenant had deployed.
+    #
+    # Fuzzy union alone is not enough: with a single operand, Azure still
+    # rejects the query ("must have at least one operand that can be evaluated
+    # successfully") once that one table fails to resolve — also verified here.
+    # The empty `datatable` gives the union a second operand that always
+    # resolves, contributing zero rows, so the query is valid whether or not
+    # the real table exists yet.
     query = <<-KQL
-      ContainerAppSystemLogs_CL
+      union isfuzzy=true ContainerAppSystemLogs_CL, (datatable(TimeGenerated: datetime, JobName_s: string, Reason_s: string, Log_s: string) [])
       | where Reason_s in ("ContainerCrashing", "BackoffLimitExceeded", "StartError")
       | where isnotempty(JobName_s)
       | project TimeGenerated, JobName_s, Reason_s, Log_s
