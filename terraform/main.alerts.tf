@@ -2,7 +2,7 @@
 # itself can see. A tenant's own failures — an empty result, a wrong answer, a
 # spend cap — are the tenant's to detect and report; what a tenant cannot
 # report is a container that never started, because nothing of its code ever
-# ran. That is what the job-failure rule below is for.
+# ran. That is what the workload-crashed rule below is for.
 #
 # HTTP status codes are the one tenant-shaped signal alerted on here anyway,
 # and that is specific to what this environment hosts: every tenant today is
@@ -54,12 +54,21 @@ resource "azurerm_monitor_action_group" "this" {
 }
 
 # ---------------------------------------------------------------------------
-# A tenant job that failed to start
+# A tenant job or app that crashed instead of running
 # ---------------------------------------------------------------------------
 
 # One rule covering every tenant, including tenants that do not exist yet. It
 # needs no edit when a project is added, which is the whole reason it lives here
 # rather than in each tenant's own configuration.
+#
+# Originally job-only: it filtered on `isnotempty(JobName_s)`, so a
+# long-running app hitting the same reasons — `ContainerCrashing` from a
+# revision that never comes up healthy, say — raised nothing. Verified on
+# 2026-09-22 that `ContainerAppSystemLogs_CL` populates `ContainerAppName_s`
+# for real apps in this workspace (`ca-gymlog-dev`, `ca-finances-dev`, …) the
+# same way it populates `JobName_s` for jobs, just never both on the same row,
+# so `coalesce()` is enough to unify them into one workload name with no risk
+# of silently dropping one arm.
 #
 # **Why a log query and not the `Executions` metric.** The obvious rule is a
 # metric alert on `Microsoft.App/jobs` `Executions` filtered to
@@ -71,19 +80,19 @@ resource "azurerm_monitor_action_group" "this" {
 # platform-side gap in alerting on that metric. `ContainerAppSystemLogs_CL`
 # carries the same failure and ingests reliably.
 #
-# **Why `dimension` and not `resource_id_column`.** Splitting by the job's ARM
-# ID would be tidier, but that ID cannot be built from this table: it has no
-# resource group column, and `_ResourceId` is empty on every row (checked across
-# 1,701 rows). Deriving the resource group from the job name by string surgery
+# **Why `dimension` and not `resource_id_column`.** Splitting by ARM ID would
+# be tidier, but that ID cannot be built from this table: it has no resource
+# group column, and `_ResourceId` is empty on every row (checked across 1,701
+# rows). Deriving the resource group from the workload name by string surgery
 # would hardcode a cross-repo naming convention into a KQL string, and point at
 # a non-existent resource the moment a tenant named its group differently.
-# Splitting on `JobName_s` needs no such assumption and still tracks each job as
-# its own alert, so one job already firing does not mask a second.
-resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
-  name                = "alert-${local.alert_name_prefix}-job-failed"
+# Splitting on the coalesced name needs no such assumption and still tracks
+# each workload as its own alert, so one already firing does not mask another.
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
+  name                = "alert-${local.alert_name_prefix}-workload-crashed"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
-  description         = "A container app job on the shared environment crashed instead of running to completion."
+  description         = "A container app or job on the shared environment crashed instead of running normally."
   severity            = 1
 
   scopes                = [azurerm_log_analytics_workspace.this.id]
@@ -93,14 +102,26 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
 
   criteria {
     # The three reasons a real crash loop is observed to emit: the exec/OCI
-    # failure itself, the job giving up, and the replica's own failure record.
-    # `Log_s` is projected so the alert payload carries the actual error rather
-    # than only a count.
+    # failure itself, the workload giving up, and the replica's own failure
+    # record. `Log_s` is projected so the alert payload carries the actual
+    # error rather than only a count.
+    #
+    # `union isfuzzy=true` rather than referencing the table directly:
+    # `ContainerAppSystemLogs_CL` is created lazily on first ingestion, so it
+    # does not exist until some tenant workload has crashed at least once. A
+    # plain reference fails rule creation itself with "Failed to resolve
+    # table" the moment the workspace is new. Fuzzy union alone isn't enough
+    # either — with a single operand Azure still rejects the query once that
+    # one table fails to resolve — so the empty `datatable` gives it a second
+    # operand that always resolves, contributing zero rows either way.
     query = <<-KQL
-      ContainerAppSystemLogs_CL
+      union isfuzzy=true
+        ContainerAppSystemLogs_CL,
+        (datatable(TimeGenerated: datetime, JobName_s: string, ContainerAppName_s: string, Reason_s: string, Log_s: string) [])
       | where Reason_s in ("ContainerCrashing", "BackoffLimitExceeded", "StartError")
-      | where isnotempty(JobName_s)
-      | project TimeGenerated, JobName_s, Reason_s, Log_s
+      | where isnotempty(JobName_s) or isnotempty(ContainerAppName_s)
+      | extend WorkloadName = coalesce(JobName_s, ContainerAppName_s)
+      | project TimeGenerated, WorkloadName, Reason_s, Log_s
     KQL
 
     time_aggregation_method = "Count"
@@ -109,7 +130,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
 
     # Include everything: a tenant added later is covered without an edit here.
     dimension {
-      name     = "JobName_s"
+      name     = "WorkloadName"
       operator = "Include"
       values   = ["*"]
     }
@@ -138,11 +159,11 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
 
 # Reads `ContainerAppHTTPLogs`, populated by the diagnostic setting in
 # main.observability.tf — the environment doesn't ship this data any other
-# way. Same shape as the job-failure rule above and for the same reason: one
-# rule, split on the `ContainerAppName` dimension, covers every app including
-# ones that don't exist yet.
+# way. Same shape as the workload-crashed rule above and for the same reason:
+# one rule, split on the `ContainerAppName` dimension, covers every app
+# including ones that don't exist yet.
 #
-# `GreaterThan 0`, matching the job-failure rule, is a deliberately low bar —
+# `GreaterThan 0`, matching the workload-crashed rule, is a deliberately low bar —
 # there's no real-traffic data yet on what a normal error rate looks like for
 # these workloads (see the file header for why any error is treated as
 # signal here rather than noise). If a tenant's ordinary operation turns out
@@ -162,10 +183,22 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
 
   criteria {
+    # Known open question, not yet resolved: apps here scale to zero
+    # (min_replicas = 0 is the point of a consumption-only environment), and
+    # Envoy can return a 5xx from ingress itself while a replica cold-starts,
+    # before any tenant code runs. Azure's documented signal for that is
+    # `ResponseFlags == "UH"` (no healthy upstream) or `ResponseCodeDetails ==
+    # "no_healthy_upstream"`, as opposed to `via_upstream` for an error the
+    # app returned itself — but `ContainerAppHTTPLogs` has zero rows on this
+    # environment so far, so there's nothing here to check that against yet.
+    # `ResponseFlags` is projected so the first real firing settles it: if
+    # cold starts turn out to trip this rule, exclude on that flag rather than
+    # on `StatusCode == 503` broadly, since an app can legitimately return its
+    # own 503.
     query = <<-KQL
       ContainerAppHTTPLogs
       | where StatusCode >= 400
-      | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails
+      | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails, ResponseFlags
     KQL
 
     time_aggregation_method = "Count"
@@ -199,7 +232,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
 
 # Reaching `daily_quota_gb` stops ingestion for the rest of the day — for every
 # tenant at once, now that the workspace is shared — which silently disables the
-# job-failure rule above along with every log it reads. Nothing in the metric
+# workload-crashed rule above along with every log it reads. Nothing in the metric
 # store reports it, so this has to be a log query.
 #
 # Hourly: measured ingestion is a fraction of a percent of the cap, so the event
