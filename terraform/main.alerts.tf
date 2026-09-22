@@ -95,6 +95,17 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
   description         = "A container app or job on the shared environment crashed instead of running normally."
   severity            = 1
 
+  # Left unset, every rule in this file deployed with `autoMitigate: false` at
+  # the ARM layer (verified against the live rules on 2026-09-22), which
+  # re-notifies on every evaluation period the condition still holds rather
+  # than once on the OK-to-Alert transition. A single ongoing incident — a job
+  # crash-looping every run, an app erroring on every request — then re-fires
+  # every `evaluation_frequency` for as long as it lasts, which is what turned
+  # two real incidents (market-agent's sync jobs and its api's auth failures)
+  # into dozens of emails. Explicit `true` on every rule below for the same
+  # reason.
+  auto_mitigation_enabled = true
+
   scopes                = [azurerm_log_analytics_workspace.this.id]
   evaluation_frequency  = "PT5M"
   window_duration       = "PT15M"
@@ -177,6 +188,10 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   description         = "A container app on the shared environment returned a 4xx or 5xx response."
   severity            = 2
 
+  # See the workload-crashed rule above for why this is explicit rather than
+  # left to default to false.
+  auto_mitigation_enabled = true
+
   scopes                = [azurerm_log_analytics_workspace.this.id]
   evaluation_frequency  = "PT5M"
   window_duration       = "PT15M"
@@ -244,6 +259,11 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "log_quota" {
   location            = azurerm_resource_group.this.location
   description         = "Shared log ingestion is approaching the workspace daily cap, past which logging stops for every tenant."
   severity            = 2
+
+  # See the workload-crashed rule above for why this is explicit rather than
+  # left to default to false: without it, a day spent over the 80% threshold
+  # re-notifies every hourly evaluation instead of once.
+  auto_mitigation_enabled = true
 
   scopes                = [azurerm_log_analytics_workspace.this.id]
   evaluation_frequency  = "PT1H"
