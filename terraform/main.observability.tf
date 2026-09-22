@@ -31,11 +31,31 @@ resource "azurerm_application_insights" "this" {
   tags = local.tags
 }
 
-# There is deliberately **no** diagnostic setting on the Container Apps
-# environment: it already ships console and system logs to this workspace via
-# `log_analytics_workspace_id`, and a diagnostic setting would ingest the same
-# lines a second time against a shared 0.15 GB/day cap.
+# There is deliberately **no** diagnostic setting for console or system logs:
+# the environment already ships those to this workspace via
+# `log_analytics_workspace_id`, and a diagnostic setting for the same
+# categories would ingest each line a second time against the shared
+# 0.15 GB/day cap.
 #
+# HTTP logs are the one exception, and the reason is that they are not shipped
+# any other way: `ContainerAppHTTPLogs` (ingress-layer request/response data —
+# method, path, status code) only exists via a diagnostic setting, so scoping
+# this one to that single category adds genuinely new data rather than a
+# second copy of something already flowing. See main.alerts.tf for what reads
+# it. It bills per request rather than per error, unlike the job-failure
+# query below, so a tenant with real traffic volume is the one case that could
+# meaningfully move the needle on the shared cap — worth knowing before a
+# high-traffic tenant joins.
+resource "azurerm_monitor_diagnostic_setting" "http_logs" {
+  name                       = module.naming.monitor_diagnostic_setting.name
+  target_resource_id         = azurerm_container_app_environment.this.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+
+  enabled_log {
+    category = "ContainerAppHTTPLogs"
+  }
+}
+
 # `AllMetrics` is off everywhere for a related reason — metrics are already in
 # the platform metric store, free to query, and routing them here would pay to
 # store a second copy.

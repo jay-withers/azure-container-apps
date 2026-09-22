@@ -17,6 +17,14 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.3.2"
     }
+
+    # Only for the Aspire Dashboard dotnet component: azurerm has no resource
+    # for it (hashicorp/terraform-provider-azurerm#28187, still open), so it's
+    # managed as a raw ARM call instead. Remove this the day that issue ships.
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -29,5 +37,9 @@ provider "azurerm" {
     }
   }
 
+  use_oidc = true
+}
+
+provider "azapi" {
   use_oidc = true
 }
