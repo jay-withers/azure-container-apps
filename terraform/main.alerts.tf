@@ -1,8 +1,18 @@
-# Alerting for the shared environment, and only for things the platform itself
-# can see. A tenant's own failures — a bad API response, an empty result, a
+# Alerting for the shared environment, and mostly for things the platform
+# itself can see. A tenant's own failures — an empty result, a wrong answer, a
 # spend cap — are the tenant's to detect and report; what a tenant cannot
 # report is a container that never started, because nothing of its code ever
 # ran. That is what the job-failure rule below is for.
+#
+# HTTP status codes are the one tenant-shaped signal alerted on here anyway,
+# and that is specific to what this environment hosts: every tenant today is
+# an agent calling agent-shaped traffic (its own jobs, other services), not a
+# public app fielding arbitrary end users, so a 4xx here is not "someone typed
+# the wrong thing" noise — it is one agent-shaped workload failing to talk to
+# another, which is exactly the cross-cutting failure a shared rule is for. If
+# a future tenant serves public traffic, its own normal 4xx rate will trip
+# this rule, and that tenant should ask for a per-app exclusion rather than
+# everyone losing the signal.
 
 # ---------------------------------------------------------------------------
 # Where alerts go
@@ -121,6 +131,67 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "job_failed" {
 # never fires emits no log at all, so nothing above catches it. The tenant's own
 # output going missing is the only signal, which is a reason for a tenant to
 # send something on every run even when it has nothing to report.
+
+# ---------------------------------------------------------------------------
+# A tenant app returning a client or server error
+# ---------------------------------------------------------------------------
+
+# Reads `ContainerAppHTTPLogs`, populated by the diagnostic setting in
+# main.observability.tf — the environment doesn't ship this data any other
+# way. Same shape as the job-failure rule above and for the same reason: one
+# rule, split on the `ContainerAppName` dimension, covers every app including
+# ones that don't exist yet.
+#
+# `GreaterThan 0`, matching the job-failure rule, is a deliberately low bar —
+# there's no real-traffic data yet on what a normal error rate looks like for
+# these workloads (see the file header for why any error is treated as
+# signal here rather than noise). If a tenant's ordinary operation turns out
+# to produce occasional 4xx/5xx, raise this threshold or add a per-app
+# exclusion rather than dropping the rule, so a genuinely broken tenant is
+# still caught.
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
+  name                = "alert-${local.alert_name_prefix}-app-error"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  description         = "A container app on the shared environment returned a 4xx or 5xx response."
+  severity            = 2
+
+  scopes                = [azurerm_log_analytics_workspace.this.id]
+  evaluation_frequency  = "PT5M"
+  window_duration       = "PT15M"
+  target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
+
+  criteria {
+    query = <<-KQL
+      ContainerAppHTTPLogs
+      | where StatusCode >= 400
+      | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails
+    KQL
+
+    time_aggregation_method = "Count"
+    operator                = "GreaterThan"
+    threshold               = 0
+
+    # Include everything: a tenant app added later is covered without an edit
+    # here.
+    dimension {
+      name     = "ContainerAppName"
+      operator = "Include"
+      values   = ["*"]
+    }
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.this.id]
+  }
+
+  tags = local.tags
+}
 
 # ---------------------------------------------------------------------------
 # The monitoring watching itself

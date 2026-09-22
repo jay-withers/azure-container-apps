@@ -23,3 +23,29 @@ resource "azurerm_container_app_environment" "this" {
   # is what makes a shared environment free to leave sitting there.
   tags = local.tags
 }
+
+# The Aspire Dashboard: a live view (traces/metrics/logs/console) over every
+# app on the shared environment, at https://aspire-dashboard.ext.<default
+# domain>. It has no cost of its own — it reads the OTLP data container apps
+# already emit rather than ingesting anything into the workspace — so it sits
+# outside the "no diagnostic setting" and daily-cap concerns above.
+#
+# `azapi_resource` rather than `azurerm_container_app_environment_dotnet_
+# component`: no such azurerm resource exists yet (see versions.tf). The name
+# "aspire-dashboard" matches `az containerapp env dotnet-component create`'s
+# default and the component already enabled by hand on this environment, which
+# this resource is written to adopt via import rather than replace.
+resource "azapi_resource" "aspire_dashboard" {
+  # Newest version the installed azapi provider's embedded schema recognizes;
+  # ARM itself has since moved on to a GA (non-preview) version, but bumping
+  # this is a `terraform init -upgrade` away once azapi catches up.
+  type      = "Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview"
+  name      = "aspire-dashboard"
+  parent_id = azurerm_container_app_environment.this.id
+
+  body = {
+    properties = {
+      componentType = "AspireDashboard"
+    }
+  }
+}
