@@ -187,6 +187,14 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
 # it fires from inside the platform against a known caller, which is exactly
 # the shape a tenant's own monitoring is positioned to catch and this shared
 # rule is not.
+#
+# `/favicon.ico` returning 404 is excluded for the same reason as the 401s
+# above, not because it is the same failure mode. Verified on 2026-09-23 on
+# gymlog: every 4xx/5xx it has ever logged, three for three, is a browser
+# auto-requesting a favicon the app never chose to serve. That is standard
+# browser behavior on any app without one, not evidence the workload is
+# broken, and the next browser-facing tenant without a favicon route hits the
+# same thing.
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   name                = "alert-${local.alert_name_prefix}-app-error"
   resource_group_name = azurerm_resource_group.this.name
@@ -219,6 +227,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
     query = <<-KQL
       ContainerAppHTTPLogs
       | where StatusCode >= 400 and StatusCode != 401
+      | where not (Path == "/favicon.ico" and StatusCode == 404)
       | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails, ResponseFlags
     KQL
 
