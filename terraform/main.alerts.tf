@@ -29,15 +29,6 @@ resource "azurerm_monitor_action_group" "this" {
   # Max 12 characters, and it is what appears in the email subject.
   short_name = substr(var.project_name, 0, 12)
 
-  arm_role_receiver {
-    name    = "subscription-owners"
-    role_id = local.owner_role_definition_id
-
-    # The common schema is the one that stays stable across alert types, so a
-    # webhook added later does not have to parse several payload shapes.
-    use_common_alert_schema = true
-  }
-
   # A second receiver alongside the role, not instead of it. Empty disables it;
   # `dynamic` rather than a static block so an empty string means no receiver
   # rather than a receiver with no address.
