@@ -172,6 +172,21 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
 # to produce occasional 4xx/5xx, raise this threshold or add a per-app
 # exclusion rather than dropping the rule, so a genuinely broken tenant is
 # still caught.
+#
+# `StatusCode != 401` excludes one specific case rather than being covered by
+# that per-app exclusion: unauthenticated scanner/bot traffic against a public
+# app. Verified on 2026-09-23 against market-agent's dashboard and api, which
+# this environment's first public-facing tenant made unavoidable — 66 of 75
+# 4xx/5xx logged over 7 days were 401s from scattered source IPs and user
+# agents sweeping `/`, `/robots.txt`, `/sitemap.xml`, `/config.json` and every
+# `/api/*` route, which the app correctly rejected. That is background noise
+# any public app on the internet gets continuously, not a signal a per-app
+# exclusion would be right to silence for one tenant — the next public tenant
+# hits the same thing. A 401 caused by a tenant's own auth actually breaking
+# (an expired identity, a misconfigured secret) is a real gap this leaves, but
+# it fires from inside the platform against a known caller, which is exactly
+# the shape a tenant's own monitoring is positioned to catch and this shared
+# rule is not.
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   name                = "alert-${local.alert_name_prefix}-app-error"
   resource_group_name = azurerm_resource_group.this.name
@@ -203,7 +218,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
     # own 503.
     query = <<-KQL
       ContainerAppHTTPLogs
-      | where StatusCode >= 400
+      | where StatusCode >= 400 and StatusCode != 401
       | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails, ResponseFlags
     KQL
 
