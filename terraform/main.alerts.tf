@@ -195,6 +195,28 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
 # browser behavior on any app without one, not evidence the workload is
 # broken, and the next browser-facing tenant without a favicon route hits the
 # same thing.
+#
+# The query is grouped into a repeat count per (app, path, status) rather
+# than a raw row count for the same underlying reason as the 401/favicon
+# exclusions, but that a path exclusion cannot reach: unauthenticated
+# vulnerability-scanner traffic, which does not park on one or two known
+# paths the way the 401 sweep did. Verified on 2026-09-26 on gymlog: 1,963
+# 4xx/5xx logged over 7 days (already past the 401/favicon filters) came from
+# 155 distinct source IPs across ~1,875 distinct paths — `/wp-includes/...`,
+# `/.env*`, `/.git/config`, `/old.sql.*`, `/actuator/env`, Jira/Confluence and
+# Spring Boot exploit probes, and more, rotating constantly — with the same
+# (path, status) pair repeating at most twice in any single 15-minute window.
+# A path- or extension-based exclusion would be a losing, ever-growing list
+# chasing scanners that never stop rotating signatures. Grouping first and
+# thresholding on the repeat count instead needs no such list, and is a
+# structural difference from real trouble: the one genuine failure gymlog
+# logged in the same 7 days — `/garmin/sync` returning 500 three times in 15
+# minutes during a transient Garmin-side outage — sat exactly at the
+# threshold below, which a scanner sweep never reached even once. Losing a
+# truly one-off failure that never recurs within a window is the accepted
+# trade-off, same as the 401/favicon exclusions accept losing a one-off auth
+# fluke — a tenant's own monitoring is what is positioned to catch that,
+# this shared rule is not.
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   name                = "alert-${local.alert_name_prefix}-app-error"
   resource_group_name = azurerm_resource_group.this.name
@@ -224,11 +246,20 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
     # cold starts turn out to trip this rule, exclude on that flag rather than
     # on `StatusCode == 503` broadly, since an app can legitimately return its
     # own 503.
+    #
+    # `arg_max(TimeGenerated, ...)` rather than separate `any()`s per column:
+    # it keeps Method/ResponseCodeDetails/ResponseFlags from the one row that
+    # produced the max TimeGenerated, so the alert payload describes one real
+    # request instead of an inconsistent mix from whichever rows `any()`
+    # happened to pick independently per column.
     query = <<-KQL
       ContainerAppHTTPLogs
       | where StatusCode >= 400 and StatusCode != 401
       | where not (Path == "/favicon.ico" and StatusCode == 404)
-      | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails, ResponseFlags
+      | summarize FailureCount = count(), arg_max(TimeGenerated, Method, ResponseCodeDetails, ResponseFlags)
+        by ContainerAppName, Path, StatusCode
+      | where FailureCount >= 3
+      | project TimeGenerated, ContainerAppName, Method, Path, StatusCode, ResponseCodeDetails, ResponseFlags, FailureCount
     KQL
 
     time_aggregation_method = "Count"
