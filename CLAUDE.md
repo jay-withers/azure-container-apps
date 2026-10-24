@@ -214,7 +214,7 @@ make lint      # every hook against every file
 make fmt       # terraform fmt -recursive
 make validate  # terraform init + validate (no Azure credentials)
 make plan      # terraform init + plan (ENV=dev|stg|prd, default dev)
-make apply     # terraform init + apply (ENV=dev|stg|prd, default dev)
+make apply     # terraform init + apply (ENV=dev|stg|prd, default dev; dev applies on merge via cd-terraform)
 make outputs   # print the values a tenant needs
 ```
 
@@ -232,15 +232,15 @@ them off `gh pr checks` rather than inferring them.** The required checks —
 set in `github-repos`, not here — are `pre-commit / Pre-commit`,
 `terraform / Terraform` and `terraform-plan`.
 
-`ci-terraform` is **only half shared**, the same split market-agent uses:
-`validate` comes from the shared `terraform.yml` and reports
-`terraform / Terraform`, while the `plan` job stays in this repo. The shared
-workflow runs no plan deliberately, because in `azure-landingzone` and
-`terraform-root-aks` the root modules resolve each other with data sources and
+`ci-terraform` calls two shared workflows. `validate` comes from
+`terraform.yml` and reports `terraform / Terraform`. `plan` calls
+`terraform-deploy.yml` once per environment, which also comments each plan on
+the PR. `terraform.yml` runs no plan, deliberately: in `azure-landingzone` and
+`terraform-root-aks` the root modules resolve each other with data sources, and
 a plan against a not-yet-applied dependency fails for something that is not a
-defect. This configuration is self-contained and plans cleanly, so the plan
-lives here rather than pushing an exception into a workflow four repos share.
-Don't "finish the migration" by moving it.
+defect. `terraform-deploy.yml` is the opt-in for configurations like this one
+that are self-contained and plan cleanly. Don't move the plan into
+`terraform.yml`.
 
 Two consequences: `plan` reuses the shared workflow's path filter via its
 `changed` output rather than declaring a second one that would drift, at the
@@ -251,6 +251,14 @@ covers what runs inside the shared workflow.
 `plan` is gated on `if: vars.AZURE_CLIENT_ID != ''`. Those variables come from
 the OIDC identity `github-repos` creates for this repo; until they are set as
 repository variables by hand, the plan legs stay skipped.
+
+`cd-terraform` **applies dev on merge to main**, via the shared
+`terraform-deploy.yml`: plan, then apply that exact plan in the same job,
+skipped when nothing changed. It is gated on the same variable, and the
+identity holds Contributor on `rg-platform-dev` (granted in `github-repos`).
+Don't run `make apply` for dev after a merge; watch the `cd-terraform` run
+instead. `workflow_dispatch` re-runs it without a commit. `make apply` is
+still how stg or prd would be applied, if that is ever decided.
 
 ## Commit messages
 
