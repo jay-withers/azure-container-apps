@@ -200,7 +200,7 @@ job all do. `terraform console`, unlike `validate`, needs a real backend.
 ## Environments
 
 `terraform/environments/{dev,stg,prd}.tfvars`; `make plan ENV=<env>` selects
-one. All three are planned in CI but **only `dev` is applied**. A second
+one. **Only `dev` is planned in CI and applied**; CI validates all three. A second
 environment would mean a second shared environment for tenants that do not
 exist yet. The plumbing is kept so that changing this is a decision rather than
 a rebuild. These files are committed intentionally; don't put secrets in them
@@ -234,8 +234,7 @@ set in `github-repos`, not here — are `pre-commit / Pre-commit`,
 
 `ci-terraform` calls two shared workflows. `validate` comes from
 `terraform.yml` and reports `terraform / Terraform`. `plan` calls
-`terraform-deploy.yml` once per environment, which also comments each plan on
-the PR. `terraform.yml` runs no plan, deliberately: in `azure-landingzone` and
+`terraform-deploy.yml` for dev, which also comments the plan on the PR. `terraform.yml` runs no plan, deliberately: in `azure-landingzone` and
 `terraform-root-aks` the root modules resolve each other with data sources, and
 a plan against a not-yet-applied dependency fails for something that is not a
 defect. `terraform-deploy.yml` is the opt-in for configurations like this one
@@ -248,13 +247,19 @@ cost of starting after `validate` instead of beside it; and `plan` needs its own
 always-reporting gate, `terraform-plan`, because `terraform / Terraform` only
 covers what runs inside the shared workflow.
 
-`plan` is gated on `if: vars.AZURE_CLIENT_ID != ''`. Those variables come from
-the OIDC identity `github-repos` creates for this repo; until they are set as
-repository variables by hand, the plan legs stay skipped.
+The shared `terraform-deploy.yml` runs its job in the `dev` GitHub
+environment. `github-repos` creates that environment and sets
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID` on it, and
+federates this repo's OIDC identity to `<repo prefix>:environment:dev` (the
+immutable `repo:jay-withers@<id>/azure-container-apps@<id>` form). Callers
+pass no credentials and can't gate on those variables, since a calling job
+outside the environment can't read them. Don't add a GitHub environment to a
+calling job, and don't plan stg or prd here without first federating them in
+`github-repos`.
 
 `cd-terraform` **applies dev on merge to main**, via the shared
 `terraform-deploy.yml`: plan, then apply that exact plan in the same job,
-skipped when nothing changed. It is gated on the same variable, and the
+skipped when nothing changed. It runs in the same `dev` environment, and the
 identity holds Contributor on `rg-platform-dev` (granted in `github-repos`).
 Don't run `make apply` for dev after a merge; watch the `cd-terraform` run
 instead. `workflow_dispatch` re-runs it without a commit. `make apply` is

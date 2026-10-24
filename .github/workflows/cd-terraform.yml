@@ -5,13 +5,15 @@ name: cd-terraform
 # job, skipped when nothing changed. This replaces a local `make apply ENV=dev`.
 #
 # Only dev, because only dev is ever applied — see "Environments" in the
-# README. stg and prd stay planned-only in ci-terraform.
+# README.
 #
-# Auth is the OIDC identity github-repos creates for this repo. Its "main"
-# federated credential trusts `ref:refs/heads/main`, which is why the job runs
-# outside a GitHub Environment: an environment would change the token subject
-# and the login would fail. It holds Contributor on rg-platform-dev and Reader
-# on the subscription, nothing more.
+# Auth is the OIDC identity github-repos creates for this repo. The shared
+# job runs in the `dev` GitHub environment, which holds AZURE_CLIENT_ID,
+# AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID and makes the token subject
+# `<repo prefix>:environment:dev` — the subject the identity's one federated
+# credential trusts, for ci-terraform's plans and this apply alike. The
+# identity holds Contributor on rg-platform-dev and Reader on the subscription,
+# nothing more.
 on:
   push:
     branches: [main]
@@ -27,14 +29,10 @@ permissions:
 
 jobs:
   apply:
-    if: vars.AZURE_CLIENT_ID != ''
     permissions:
       id-token: write
       contents: read
-    uses: jay-withers/workflows/.github/workflows/terraform-deploy.yml@10a897d48ad51b5ca87f9644b6c425f4fac159f1 # v1.6.0
+    uses: jay-withers/workflows/.github/workflows/terraform-deploy.yml@13ed02c1460d2d5dcc5537e8f8686eb57c403fb9 # v1.7.0
     with:
       environment: dev
       apply: true
-      client-id: ${{ vars.AZURE_CLIENT_ID }}
-      tenant-id: ${{ vars.AZURE_TENANT_ID }}
-      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
