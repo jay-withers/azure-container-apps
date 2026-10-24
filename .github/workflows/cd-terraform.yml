@@ -1,0 +1,40 @@
+name: cd-terraform
+
+# Applies dev on every merge to main that touches Terraform, through the
+# shared terraform-deploy.yml: plan, then apply that exact plan in the same
+# job, skipped when nothing changed. This replaces a local `make apply ENV=dev`.
+#
+# Only dev, because only dev is ever applied — see "Environments" in the
+# README. stg and prd stay planned-only in ci-terraform.
+#
+# Auth is the OIDC identity github-repos creates for this repo. Its "main"
+# federated credential trusts `ref:refs/heads/main`, which is why the job runs
+# outside a GitHub Environment: an environment would change the token subject
+# and the login would fail. It holds Contributor on rg-platform-dev and Reader
+# on the subscription, nothing more.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".terraform-version"
+      - ".github/workflows/cd-terraform.yml"
+  # Re-apply without a commit: after a failed run, or to correct drift.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    if: vars.AZURE_CLIENT_ID != ''
+    permissions:
+      id-token: write
+      contents: read
+    uses: jay-withers/workflows/.github/workflows/terraform-deploy.yml@10a897d48ad51b5ca87f9644b6c425f4fac159f1 # v1.6.0
+    with:
+      environment: dev
+      apply: true
+      client-id: ${{ vars.AZURE_CLIENT_ID }}
+      tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
