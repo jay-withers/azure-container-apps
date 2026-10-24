@@ -131,8 +131,9 @@ Then `make plan ENV=dev` and `make apply ENV=dev`.
 ## Environments
 
 `terraform/environments/{dev,stg,prd}.tfvars` are the per-environment inputs.
-All three are planned in CI; **only `dev` is applied**. The plumbing is kept so
-that changing this is a decision rather than a rebuild.
+**Only `dev` is planned in CI and applied**, because only `dev` has an Azure
+identity; CI validates all three. The plumbing is kept so that changing this is
+a decision rather than a rebuild.
 
 These files are committed intentionally. Do not put secrets in them — gitleaks
 scans as a backstop.
