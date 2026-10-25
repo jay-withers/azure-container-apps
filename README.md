@@ -158,7 +158,7 @@ make lint       # every hook against every file
 make fmt        # terraform fmt -recursive
 make validate   # init + validate, no Azure credentials
 make plan       # init + plan     (ENV=dev|stg|prd, default dev)
-make apply      # init + apply    (ENV=dev|stg|prd, default dev; dev applies on merge via cd-terraform)
+make apply      # init + apply    (ENV=dev|stg|prd, default dev; dev is applied by running cd-terraform)
 make outputs    # the values a project needs to point at this environment
 ```
 
