@@ -214,7 +214,7 @@ make lint      # every hook against every file
 make fmt       # terraform fmt -recursive
 make validate  # terraform init + validate (no Azure credentials)
 make plan      # terraform init + plan (ENV=dev|stg|prd, default dev)
-make apply     # terraform init + apply (ENV=dev|stg|prd, default dev; dev applies on merge via cd-terraform)
+make apply     # terraform init + apply (ENV=dev|stg|prd, default dev; dev is applied by running cd-terraform by hand)
 make outputs   # print the values a tenant needs
 ```
 
@@ -257,12 +257,12 @@ outside the environment can't read them. Don't add a GitHub environment to a
 calling job, and don't plan stg or prd here without first federating them in
 `github-repos`.
 
-`cd-terraform` **applies dev on merge to main**, via the shared
-`terraform-deploy.yml`: plan, then apply that exact plan in the same job,
-skipped when nothing changed. It runs in the same `dev` environment, and the
+`cd-terraform` **plans dev on merge to main and applies only when run by
+hand** (Actions → Run workflow), via the shared `terraform-deploy.yml`. A merge
+whose plan has changes opens a `terraform-pending` issue; the manual run
+applies exactly the plan it prints and closes it. It runs in the same `dev` environment, and the
 identity holds Contributor on `rg-platform-dev` (granted in `github-repos`).
-Don't run `make apply` for dev after a merge; watch the `cd-terraform` run
-instead. `workflow_dispatch` re-runs it without a commit. `make apply` is
+Apply dev by running `cd-terraform`, not with a local `make apply`. `make apply` is
 still how stg or prd would be applied, if that is ever decided.
 
 ## Commit messages
