@@ -44,9 +44,9 @@ variable "alert_email_address" {
 }
 
 variable "monthly_budget_amount" {
-  description = "Monthly Azure spend, in the subscription's billing currency, above which the budget notifies. This configuration has no standing cost at all — no database, no workload profile, and everything inside the Log Analytics free grant — so the default is a low ceiling chosen to notice a mistake (a workload profile attached by hand, a tenant's runaway logging) rather than to accommodate normal operation. Notifications only: Azure budgets never stop anything spending."
+  description = "Monthly Azure spend, in the subscription's billing currency, above which the budget notifies. The shared Postgres server is the only standing cost here (B1ms, about 13-17 a month); everything else is still Consumption-only and inside the Log Analytics free grant. The default sits just above the server, so it notices a mistake (a workload profile attached by hand, a tenant's runaway logging, a second server) rather than firing every month. Notifications only: Azure budgets never stop anything spending."
   type        = number
-  default     = 5
+  default     = 25
 
   validation {
     condition     = var.monthly_budget_amount > 0
@@ -63,4 +63,34 @@ variable "budget_start_date" {
     condition     = can(regex("^\\d{4}-\\d{2}-01T00:00:00Z$", var.budget_start_date))
     error_message = "budget_start_date must be the first of a month, as YYYY-MM-01T00:00:00Z."
   }
+}
+
+variable "postgres_sku_name" {
+  description = "Compute SKU of the shared Postgres server. Burstable B1ms is the smallest Flexible Server offers; there is no serverless or auto-pause tier, so this bills per hour for as long as the server exists."
+  type        = string
+  default     = "B_Standard_B1ms"
+}
+
+variable "postgres_version" {
+  description = "Major PostgreSQL version of the shared server. Matches market-agent's, so its data moves by dump and restore without a version change on the way."
+  type        = string
+  default     = "17"
+}
+
+variable "postgres_storage_mb" {
+  description = "Provisioned storage. Billed on this figure rather than bytes used, and it can never be reduced, only grown, so it sits at Azure's 32 GB minimum."
+  type        = number
+  default     = 32768
+}
+
+variable "postgres_storage_tier" {
+  description = "Storage performance tier. P4 is the default for 32 GB; a higher tier raises the monthly bill for IOPS no tenant here needs."
+  type        = string
+  default     = "P4"
+}
+
+variable "postgres_zone" {
+  description = "Availability zone the server is placed in. northeurope offers 1, 2 and 3 for B1ms."
+  type        = string
+  default     = "1"
 }

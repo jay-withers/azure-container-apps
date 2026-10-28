@@ -3,9 +3,10 @@
 A shared Azure Container Apps environment that any project can deploy onto.
 
 This repository owns the environment and the observability behind it, and
-nothing else. It has **no standing cost**: no database, no container registry,
-no workload profile, and all ingestion inside the Log Analytics free grant. An
-environment with nothing deployed to it bills nothing.
+little else: the event tables tenants report deploys and operations into, and
+one shared Postgres server. **The Postgres server is the only standing cost**
+(B1ms, roughly £13/month): there is no container registry, no workload
+profile, and all ingestion stays inside the Log Analytics free grant.
 
 ## What is shared, and what is not
 
@@ -15,15 +16,28 @@ environment with nothing deployed to it bills nothing.
 | Log Analytics workspace | yes | |
 | Application Insights | yes | |
 | Job-failure and log-quota alerts | yes | |
+| `Deployments_CL`, `OpsEvents_CL` and their ingestion endpoint and rule | yes | sends rows |
+| Postgres server | yes, one for everyone | its own database and login on it |
 | Resource group | for the above | its own |
 | Key Vault | | its own |
 | Managed identity | | its own |
 | Container apps and jobs | | its own |
-| Databases, storage, anything else | | its own |
+| Storage, anything else | | its own |
 
 The split is deliberate. A project can be created, changed and destroyed without
 touching this repository, and its secrets sit in a vault no other project's
 identity can read.
+
+**Sending events** needs `Monitoring Metrics Publisher` on the events rule,
+granted to each repo's deploy identity in github-repos (a role assignment no
+pipeline here may create). The shared deploy workflow writes a `Deployments_CL`
+row on every deploy by itself; jobs write `OpsEvents_CL` heartbeats.
+
+**The Postgres server is shared, its databases are not.** Each tenant gets its
+own database and its own Entra login, created by a person with the Entra
+administrator role. Its name has a random suffix: read it with `make outputs`.
+Grafana's `grafana` role is the only one that logs in with a password, because
+Grafana cannot use an Entra token for its own database.
 
 **A container app or job may live in a different resource group from its
 environment, but not a different region.** Everything deploying here must be in
