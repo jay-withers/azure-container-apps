@@ -81,18 +81,16 @@ resource "random_password" "postgres_admin" {
   special = false
 }
 
-# Hardcoded rather than taken from the deploying principal, so an apply from
+# From a variable rather than the deploying principal, so an apply from
 # cd-terraform never makes the OIDC identity the administrator and locks every
 # human out. Same principal as market-agent's server.
 resource "azurerm_postgresql_flexible_server_active_directory_administrator" "this" {
   server_name         = azurerm_postgresql_flexible_server.this.name
   resource_group_name = azurerm_resource_group.this.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  object_id           = "b168eef0-d213-406e-a7f9-7b9198d580da"
-  # The Entra user's real UPN, which ARM makes the PostgreSQL role name. It
-  # must match the account exactly or the login fails.
-  principal_name = "jay.withers@appvia.io"
-  principal_type = "User"
+  object_id           = var.postgres_entra_administrator.object_id
+  principal_name      = var.postgres_entra_administrator.principal_name
+  principal_type      = "User"
 }
 
 resource "azurerm_postgresql_flexible_server_database" "grafana" {
