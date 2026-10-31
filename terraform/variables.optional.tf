@@ -29,20 +29,6 @@ variable "tags" {
   default     = {}
 }
 
-variable "alert_email_address" {
-  description = "Address added to the alert action group as an email receiver, alongside the ARM role receiver that reaches whoever holds `Owner` on the subscription. Committed deliberately: this repository is public, so an address here is permanent in its history — an address is an identifier rather than a credential. Set it empty to send to the Owner role alone, or override with `TF_VAR_alert_email_address` to keep a different address out of git."
-  type        = string
-  default     = "withersj888@outlook.com"
-
-  validation {
-    # Printable ASCII either side of the `@`. A curly quote pasted from
-    # somewhere that autocorrects is invisible in most output and has already
-    # cost the market-agent project one day's summary email.
-    condition     = var.alert_email_address == "" || can(regex("^[!-?A-~]+@[!-?A-~]+\\.[!-?A-~]+$", var.alert_email_address))
-    error_message = "alert_email_address must be empty or a plain-ASCII email address."
-  }
-}
-
 variable "monthly_budget_amount" {
   description = "Monthly Azure spend, in the subscription's billing currency, above which the budget notifies. The shared Postgres server is the only standing cost here (B1ms, about 13-17 a month); everything else is still Consumption-only and inside the Log Analytics free grant. The default sits just above the server, so it notices a mistake (a workload profile attached by hand, a tenant's runaway logging, a second server) rather than firing every month. Notifications only: Azure budgets never stop anything spending."
   type        = number
