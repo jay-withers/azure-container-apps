@@ -150,10 +150,12 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
   tags = local.tags
 }
 
-# Known gap, stated rather than left to be discovered: a schedule that silently
-# never fires emits no log at all, so nothing above catches it. The tenant's own
-# output going missing is the only signal, which is a reason for a tenant to
-# send something on every run even when it has nothing to report.
+# A schedule that silently never fires emits no log at all, so nothing above
+# catches it. observability's hourly heartbeat check does: it records each
+# job's `heartbeat` row in OpsEvents_CL, and `ops_event_bad` below fires on
+# `overdue`. That check lives outside this file because it needs 30 days of
+# history to learn a weekly job's cadence, and a log alert can look back at
+# most two.
 
 # ---------------------------------------------------------------------------
 # A tenant app returning a client or server error
@@ -395,3 +397,113 @@ resource "azurerm_consumption_budget_resource_group" "this" {
 
 # Note this budget covers **this** resource group only. Each tenant's spend
 # lands in the tenant's own group and is the tenant's own budget to set.
+
+# ---------------------------------------------------------------------------
+# An operational check that reported a problem, or stopped reporting
+# ---------------------------------------------------------------------------
+
+# Every OpsEvents_CL emitter writes its latest verdict per thing it checks:
+# terraform-deploy.yml's nightly drift check (`drift`, one per Terraform
+# root), observability's TLS check (`expiry`, one per host) and its hourly job
+# heartbeat check (`heartbeat`, one per Container Apps job). One rule reads
+# them all, so a new emitter or a new job needs no edit here.
+#
+# Only the *latest* row per Kind and Name counts, so a fixed problem clears
+# the alert on the next good row (with auto-mitigation) rather than staying
+# lit for the whole window. Two days of window, because the drift and expiry
+# rows are nightly and a missed night must not read as "fixed".
+#
+# Split on Kind and Name, not on Repo, so one drifted root doesn't mask
+# another and the email says exactly what is wrong. Detail and RunUrl are
+# projected so the alert payload carries the plan summary or the cert date
+# and a link to the run.
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_event_bad" {
+  name                = "alert-${local.alert_name_prefix}-ops-event-bad"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  description         = "An operational check (Terraform drift, certificate expiry, an overdue job) reported a problem in OpsEvents_CL."
+  severity            = 2
+
+  auto_mitigation_enabled = true
+
+  scopes                = [azurerm_log_analytics_workspace.this.id]
+  evaluation_frequency  = "PT1H"
+  window_duration       = "P2D"
+  target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
+
+  criteria {
+    query = <<-KQL
+      OpsEvents_CL
+      | summarize arg_max(TimeGenerated, Status, Detail, RunUrl, Repo) by Kind, Name
+      | where Status in ("failed", "drifted", "expiring", "overdue")
+      | extend Check = strcat(Kind, ": ", Name)
+      | project TimeGenerated, Check, Status, Detail, RunUrl, Repo
+    KQL
+
+    time_aggregation_method = "Count"
+    operator                = "GreaterThan"
+    threshold               = 0
+
+    dimension {
+      name     = "Check"
+      operator = "Include"
+      values   = ["*"]
+    }
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.this.id]
+  }
+
+  tags = local.tags
+}
+
+# The rule above can only report what is written. A broken emitter, an
+# expired identity or a workflow that stopped being scheduled looks exactly
+# like a quiet, healthy estate, so this fires when OpsEvents_CL gets nothing
+# at all. Six hours: the heartbeat check writes every hour, so six silent
+# hours is never GitHub's schedule running late. Deployments_CL has no such
+# rule, because a quiet week of deploys is normal; the heartbeat check
+# records its age as a `heartbeat` row instead.
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_events_silent" {
+  name                = "alert-${local.alert_name_prefix}-ops-events-silent"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  description         = "Nothing has written to OpsEvents_CL for six hours: the checks themselves have stopped."
+  severity            = 2
+
+  auto_mitigation_enabled = true
+
+  scopes                = [azurerm_log_analytics_workspace.this.id]
+  evaluation_frequency  = "PT1H"
+  window_duration       = "PT6H"
+  target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
+
+  criteria {
+    query = <<-KQL
+      OpsEvents_CL
+      | summarize Rows = count()
+    KQL
+
+    time_aggregation_method = "Total"
+    metric_measure_column   = "Rows"
+    operator                = "LessThan"
+    threshold               = 1
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.this.id]
+  }
+
+  tags = local.tags
+}
