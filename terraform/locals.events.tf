@@ -36,7 +36,7 @@ locals {
       { name = "Kind", type = "string" },
       # what it is about: a job name, a Terraform root, a secret, a database
       { name = "Name", type = "string" },
-      # ok | failed | drifted | expiring
+      # ok | failed | drifted | expiring | overdue
       { name = "Status", type = "string" },
       { name = "Detail", type = "string" },
       { name = "RunUrl", type = "string" },
