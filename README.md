@@ -129,12 +129,14 @@ Once, before the first apply:
 az provider register --namespace Microsoft.App
 az provider register --namespace Microsoft.OperationalInsights
 az provider register --namespace Microsoft.Insights
-
-az storage container create \
-  --name azure-container-apps \
-  --account-name sttfsharedjw \
-  --auth-mode login
 ```
+
+The state container comes from github-repos (its `state_consumers` entry), not
+from here. Don't create it with `az storage container create`: github-repos
+would then fail to create it and need an `import`. On a fresh subscription,
+apply just that container in github-repos first, because github-repos' full
+apply looks up this repo's environment and events rule (factory's
+`docs/greenfield.md` has the order).
 
 `Microsoft.App` genuinely needs this — the environment fails with
 `MissingSubscriptionRegistration` on a subscription where it has never been
