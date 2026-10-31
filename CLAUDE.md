@@ -225,8 +225,8 @@ happened once.
 ## State and the partial backend
 
 State lives in `sttfsharedjw` / `rg-tfstate-shared`, container
-`azure-container-apps`, created by `github-repos`' `scripts/bootstrap-state.ps1`
-and with its OIDC identity managed by that repo too. The `backend "azurerm" {}`
+`azure-container-apps`, created by `github-repos`' Terraform
+(`state_consumers`) along with its OIDC identity. The `backend "azurerm" {}`
 block in `versions.tf` is **partial** — per-environment values are in
 `backends/<env>.hcl`, committed, because the container is protected by RBAC
 rather than by obscurity.
