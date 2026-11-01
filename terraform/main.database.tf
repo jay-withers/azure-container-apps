@@ -76,6 +76,19 @@ resource "azurerm_postgresql_flexible_server" "this" {
   }
 }
 
+# prevent_destroy only guards against this configuration; the lock also stops a
+# portal click or a CLI delete, and covers everything inside the server. The
+# pipeline can create it (github-repos' Resource Lock Creator role) but not
+# remove it: that is github-repos' manual-remove-lock workflow, run by hand.
+# While it stands, deleting anything in the server through Azure Resource Manager
+# fails too, databases included.
+resource "azurerm_management_lock" "server" {
+  name       = "lock-${azurerm_postgresql_flexible_server.this.name}"
+  scope      = azurerm_postgresql_flexible_server.this.id
+  lock_level = "CanNotDelete"
+  notes      = "Shared Postgres: every tenant database lives here. Remove with github-repos' manual-remove-lock."
+}
+
 resource "random_password" "postgres_admin" {
   length  = 40
   special = false
