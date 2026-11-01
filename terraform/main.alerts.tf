@@ -404,9 +404,11 @@ resource "azurerm_consumption_budget_resource_group" "this" {
 
 # Every OpsEvents_CL emitter writes its latest verdict per thing it checks:
 # terraform-deploy.yml's nightly drift check (`drift`, one per Terraform
-# root), observability's TLS check (`expiry`, one per host) and its hourly job
-# heartbeat check (`heartbeat`, one per Container Apps job). One rule reads
-# them all, so a new emitter or a new job needs no edit here.
+# root), observability's TLS check (`expiry`, one per host), its hourly job
+# heartbeat check (`heartbeat`, one per Container Apps job), its nightly
+# session-resource check (`session`, one per billable category: `running` is a
+# firewall, cluster or VM still up overnight) and its cost feed (`cost-feed`).
+# One rule reads them all, so a new emitter or a new job needs no edit here.
 #
 # Only the *latest* row per Kind and Name counts, so a fixed problem clears
 # the alert on the next good row (with auto-mitigation) rather than staying
@@ -421,7 +423,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_event_bad" {
   name                = "alert-${local.alert_name_prefix}-ops-event-bad"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
-  description         = "An operational check (Terraform drift, certificate expiry, an overdue job) reported a problem in OpsEvents_CL."
+  description         = "An operational check (Terraform drift, certificate expiry, an overdue job, a session resource left running, a failed cost feed) reported a problem in OpsEvents_CL."
   severity            = 2
 
   auto_mitigation_enabled = true
@@ -435,7 +437,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_event_bad" {
     query = <<-KQL
       OpsEvents_CL
       | summarize arg_max(TimeGenerated, Status, Detail, RunUrl, Repo) by Kind, Name
-      | where Status in ("failed", "drifted", "expiring", "overdue")
+      | where Status in ("failed", "drifted", "expiring", "overdue", "running")
       | extend Check = strcat(Kind, ": ", Name)
       | project TimeGenerated, Check, Status, Detail, RunUrl, Repo
     KQL

@@ -16,7 +16,7 @@ profile, and all ingestion stays inside the Log Analytics free grant.
 | Log Analytics workspace | yes | |
 | Application Insights | yes | |
 | Job-failure and log-quota alerts | yes | |
-| `Deployments_CL`, `OpsEvents_CL` and their ingestion endpoint and rule | yes | sends rows |
+| `Deployments_CL`, `OpsEvents_CL`, `Costs_CL` and their ingestion endpoint and rule | yes | sends rows |
 | Postgres server | yes, one for everyone | its own database and login on it |
 | Resource group | for the above | its own |
 | Key Vault | | its own |
@@ -31,7 +31,7 @@ identity can read.
 **Sending events** needs `Monitoring Metrics Publisher` on the events rule,
 granted to each repo's deploy identity in github-repos (a role assignment no
 pipeline here may create). The shared deploy workflow writes a `Deployments_CL`
-row on every deploy by itself; jobs write `OpsEvents_CL` heartbeats.
+row on every deploy by itself; jobs write `OpsEvents_CL` heartbeats, and observability writes nightly `Costs_CL` rows.
 
 **The Postgres server is shared, its databases are not.** Each tenant gets its
 own database and its own Entra login, created by a person with the Entra
