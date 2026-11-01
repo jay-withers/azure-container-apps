@@ -43,7 +43,7 @@ output "app_insights_name" {
 }
 
 output "events_ingestion_endpoint" {
-  description = "Logs Ingestion endpoint for `Deployments_CL` and `OpsEvents_CL`. github-repos sets it on every app repo's dev environment as `EVENTS_INGESTION_ENDPOINT`, which the shared deploy workflow posts to."
+  description = "Logs Ingestion endpoint for `Deployments_CL`, `OpsEvents_CL` and `Costs_CL`. github-repos sets it on every app repo's dev environment as `EVENTS_INGESTION_ENDPOINT`, which the shared deploy workflow posts to."
   value       = azurerm_monitor_data_collection_endpoint.events.logs_ingestion_endpoint
 }
 

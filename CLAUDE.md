@@ -16,7 +16,7 @@ The split it enforces:
 | Container Apps environment | yes | no |
 | Log Analytics, App Insights | yes | no |
 | Job-failure, log-quota and ops-event alerts, budget | yes | no |
-| `Deployments_CL`/`OpsEvents_CL`, their DCE and DCR | yes | sends rows |
+| `Deployments_CL`/`OpsEvents_CL`/`Costs_CL`, their DCE and DCR | yes | sends rows |
 | Postgres **server** | yes, one shared | its own database and login |
 | Resource group | its own | its own |
 | Key Vault, managed identity | **no** | yes |
@@ -101,8 +101,9 @@ replaced there and is not reproduced here.
 
 **`ops_event_bad` and `ops_events_silent` read `OpsEvents_CL`, not
 platform logs.** The first fires on the latest `failed`, `drifted`,
-`expiring` or `overdue` row per Kind and Name (drift from terraform-deploy's
-nightly check, expiry and job heartbeats from observability); the second when
+`expiring`, `overdue` or `running` row per Kind and Name (drift from
+terraform-deploy's nightly check; expiry, job heartbeats, session resources
+left running and the cost feed from observability); the second when
 the table gets nothing for six hours, so a dead emitter can't pass for a quiet
 estate. Job liveness is computed in observability, not here: learning a
 weekly job's cadence needs 30 days of history, and a log alert's window is at
