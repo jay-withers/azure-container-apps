@@ -3,10 +3,11 @@
 A shared Azure Container Apps environment that any project can deploy onto.
 
 This repository owns the environment and the observability behind it, and
-little else: the event tables tenants report deploys and operations into, and
-one shared Postgres server. **The Postgres server is the only standing cost**
-(B1ms, roughly £13/month): there is no container registry, no workload
-profile, and all ingestion stays inside the Log Analytics free grant.
+little else: the event tables tenants report deploys and operations into.
+**Nothing here bills while idle**: there is no container registry, no workload
+profile and no database server (the shared Postgres server was removed in
+2026-11, once nothing used it), and all ingestion stays inside the Log
+Analytics free grant.
 
 ## What is shared, and what is not
 
@@ -17,7 +18,6 @@ profile, and all ingestion stays inside the Log Analytics free grant.
 | Application Insights | yes | |
 | Job-failure and log-quota alerts | yes | |
 | `Deployments_CL`, `OpsEvents_CL`, `Costs_CL` and their ingestion endpoint and rule | yes | sends rows |
-| Postgres server | yes, one for everyone | its own database and login on it |
 | Resource group | for the above | its own |
 | Key Vault | | its own |
 | Managed identity | | its own |
@@ -32,12 +32,6 @@ identity can read.
 granted to each repo's deploy identity in github-repos (a role assignment no
 pipeline here may create). The shared deploy workflow writes a `Deployments_CL`
 row on every deploy by itself; jobs write `OpsEvents_CL` heartbeats, and observability writes nightly `Costs_CL` rows.
-
-**The Postgres server is shared, its databases are not.** Each tenant gets its
-own database and its own Entra login, created by a person with the Entra
-administrator role. Its name has a random suffix: read it with `make outputs`.
-Grafana's `grafana` role is the only one that logs in with a password, because
-Grafana cannot use an Entra token for its own database.
 
 **A container app or job may live in a different resource group from its
 environment, but not a different region.** Everything deploying here must be in

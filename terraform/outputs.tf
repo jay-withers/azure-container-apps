@@ -56,13 +56,3 @@ output "events_dcr_id" {
   description = "ARM ID of the events data collection rule: the scope github-repos grants `Monitoring Metrics Publisher` on, for each identity allowed to send."
   value       = azurerm_monitor_data_collection_rule.events.id
 }
-
-output "postgres_server_name" {
-  description = "Name of the shared Postgres server. It carries a random suffix (see main.database.tf), so tenants take it from here rather than deriving it."
-  value       = azurerm_postgresql_flexible_server.this.name
-}
-
-output "postgres_fqdn" {
-  description = "Host tenants connect to. Each tenant has its own database and login on it."
-  value       = azurerm_postgresql_flexible_server.this.fqdn
-}
