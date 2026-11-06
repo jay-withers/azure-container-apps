@@ -62,7 +62,7 @@ one deliberate exception, a shared Postgres Flexible Server (B1ms, ~£13/month
 with no auto-pause tier). It was removed in 2026-11 once nothing used it:
 every tenant keeps its data in blob storage (market-agent as DuckDB) and
 Grafana in SQLite. `monthly_budget_amount` was raised from 5 to 25 for it and
-has not been lowered. Do not add a standing cost without the trade-off being
+went back to 5 when it went. Do not add a standing cost without the trade-off being
 made out loud:
 
 - **The environment has no `workload_profile` block.** A workload profile is a

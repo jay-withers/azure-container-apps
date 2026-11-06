@@ -30,9 +30,9 @@ variable "tags" {
 }
 
 variable "monthly_budget_amount" {
-  description = "Monthly Azure spend, in the subscription's billing currency, above which the budget notifies. Nothing here has a standing cost since the shared Postgres server went (2026-11): everything is Consumption-only and inside the Log Analytics free grant. The default dates from when the server billed about 13-17 a month, and still catches a mistake (a workload profile attached by hand, a tenant's runaway logging, a database server) rather than firing every month. Notifications only: Azure budgets never stop anything spending."
+  description = "Monthly Azure spend, in the subscription's billing currency, above which the budget notifies. Nothing here has a standing cost since the shared Postgres server went (2026-11): everything is Consumption-only and inside the Log Analytics free grant. It was 25 while the server billed about 13-17 a month, and is back at 5 so it catches a mistake (a workload profile attached by hand, a tenant's runaway logging, a database server) within the month. Notifications only: Azure budgets never stop anything spending."
   type        = number
-  default     = 25
+  default     = 5
 
   validation {
     condition     = var.monthly_budget_amount > 0
