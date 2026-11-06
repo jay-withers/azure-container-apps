@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Terraform for the **one** Azure Container Apps environment every project
 deploys onto, plus the Log Analytics workspace, Application Insights and
-alerting behind it, the event tables tenants report into, and one shared
-Postgres server. It deliberately holds nothing else.
+alerting behind it, and the event tables tenants report into. It
+deliberately holds nothing else.
 
 The split it enforces:
 
@@ -17,7 +17,6 @@ The split it enforces:
 | Log Analytics, App Insights | yes | no |
 | Job-failure, log-quota and ops-event alerts, budget | yes | no |
 | `Deployments_CL`/`OpsEvents_CL`/`Costs_CL`, their DCE and DCR | yes | sends rows |
-| Postgres **server** | yes, one shared | its own database and login |
 | Resource group | its own | its own |
 | Key Vault, managed identity | **no** | yes |
 | Container apps and jobs | **no** | yes |
@@ -58,14 +57,13 @@ Two consequences that bite:
 
 ## The cost constraint
 
-Nothing here bills while idle, and that is the whole design, **with one
-deliberate exception: the shared Postgres server** (`main.database.tf`). B1ms
-has no serverless or auto-pause tier, so it bills ~£13/month for as long as it
-exists. It is here because one shared server is the cheapest way to give
-every tenant (market-agent, Grafana) a database at all; a server per project
-per environment was the alternative. `monthly_budget_amount` was raised from 5
-to 25 for it. Do not add a second standing cost without the same trade-off
-being made out loud:
+Nothing here bills while idle, and that is the whole design. There used to be
+one deliberate exception, a shared Postgres Flexible Server (B1ms, ~£13/month
+with no auto-pause tier). It was removed in 2026-11 once nothing used it:
+every tenant keeps its data in blob storage (market-agent as DuckDB) and
+Grafana in SQLite. `monthly_budget_amount` was raised from 5 to 25 for it and
+has not been lowered. Do not add a standing cost without the trade-off being
+made out loud:
 
 - **The environment has no `workload_profile` block.** A workload profile is a
   standing per-hour charge whether or not anything runs. Consumption-only is
@@ -170,17 +168,15 @@ app environments, apps and jobs all reject uppercase.
 since each names the environment in its own tfvars. Treat it as fixed once
 anything has deployed.
 
-**The Postgres server is the exception: `.name_unique`.** Its name is a
-public DNS label, unique across all of Azure, and tenants never resolve it by
-data source; they read its FQDN from `make outputs`. The DCE and DCR are named
-by hand (`dce-platform-dev`, `dcr-platform-events-dev`).
+The DCE and DCR are named by hand (`dce-platform-dev`,
+`dcr-platform-events-dev`).
 
 Two rules hold that the naming module does not: there is no
 `monitor_scheduled_query_rules_alert` token for two distinct rules, so both are
-named by hand from `local.alert_name_prefix`; and apart from the Postgres
-server, Key Vault-style global uniqueness does not apply to anything here.
+named by hand from `local.alert_name_prefix`; and Key Vault-style global
+uniqueness does not apply to anything here.
 
-## Events and the shared database
+## Events
 
 - **`local.event_tables` is both the tables' schema and the DCR's stream
   declaration.** A column the sender includes but the table lacks is dropped
@@ -190,11 +186,6 @@ server, Key Vault-style global uniqueness does not apply to anything here.
 - **Who may send is a role assignment** (`Monitoring Metrics Publisher` on the
   DCR), granted in github-repos next to each deploy identity, never here: a
   pipeline identity cannot create role assignments.
-- **Password auth is on for Grafana alone.** Its database connection cannot
-  use an Entra token. Every other role is Entra. `pgadmin`'s password exists
-  only in state and is never output or used.
-- **`prevent_destroy` on the server and on `grafana`.** Every tenant's data is
-  on this server.
 
 ## Terraform layout
 
