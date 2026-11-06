@@ -104,7 +104,8 @@ platform logs.** The first fires on the latest `failed`, `drifted`,
 `expiring`, `overdue` or `running` row per Kind and Name (drift from
 terraform-deploy's nightly check; expiry, job heartbeats, session resources
 left running and the cost feed from observability); the second when
-the table gets nothing for six hours, so a dead emitter can't pass for a quiet
+the table gets nothing for two days (every emitter is daily, and GitHub
+starts schedules hours late), so a dead emitter can't pass for a quiet
 estate. Job liveness is computed in observability, not here: learning a
 weekly job's cadence needs 30 days of history, and a log alert's window is at
 most two.

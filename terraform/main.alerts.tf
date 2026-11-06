@@ -151,7 +151,7 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
 }
 
 # A schedule that silently never fires emits no log at all, so nothing above
-# catches it. observability's hourly heartbeat check does: it records each
+# catches it. observability's daily heartbeat check does: it records each
 # job's `heartbeat` row in OpsEvents_CL, and `ops_event_bad` below fires on
 # `overdue`. That check lives outside this file because it needs 30 days of
 # history to learn a weekly job's cadence, and a log alert can look back at
@@ -404,7 +404,7 @@ resource "azurerm_consumption_budget_resource_group" "this" {
 
 # Every OpsEvents_CL emitter writes its latest verdict per thing it checks:
 # terraform-deploy.yml's nightly drift check (`drift`, one per Terraform
-# root), observability's TLS check (`expiry`, one per host), its hourly job
+# root), observability's TLS check (`expiry`, one per host), its daily job
 # heartbeat check (`heartbeat`, one per Container Apps job), its nightly
 # session-resource check (`session`, one per billable category: `running` is a
 # firewall, cluster or VM still up overnight) and its cost feed (`cost-feed`).
@@ -468,22 +468,24 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_event_bad" {
 # The rule above can only report what is written. A broken emitter, an
 # expired identity or a workflow that stopped being scheduled looks exactly
 # like a quiet, healthy estate, so this fires when OpsEvents_CL gets nothing
-# at all. Six hours: the heartbeat check writes every hour, so six silent
-# hours is never GitHub's schedule running late. Deployments_CL has no such
+# at all. Two days, the most a log alert can look back: every emitter is
+# daily, and GitHub starts scheduled runs up to eight hours late (and dropped
+# most of the hourly heartbeat runs, which is why that check is now daily
+# too), so anything shorter fires on a late schedule. Deployments_CL has no such
 # rule, because a quiet week of deploys is normal; the heartbeat check
 # records its age as a `heartbeat` row instead.
 resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ops_events_silent" {
   name                = "alert-${local.alert_name_prefix}-ops-events-silent"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
-  description         = "Nothing has written to OpsEvents_CL for six hours: the checks themselves have stopped."
+  description         = "Nothing has written to OpsEvents_CL for two days: the checks themselves have stopped."
   severity            = 2
 
   auto_mitigation_enabled = true
 
   scopes                = [azurerm_log_analytics_workspace.this.id]
   evaluation_frequency  = "PT1H"
-  window_duration       = "PT6H"
+  window_duration       = "P2D"
   target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
 
   criteria {
