@@ -97,8 +97,11 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "workload_crashed" {
   # reason.
   auto_mitigation_enabled = true
 
+  # Every 15 minutes rather than 5: no tenant is critical enough to justify
+  # the 5-minute price tier (log alerts bill per rule by frequency), and a
+  # window equal to the frequency still covers every minute exactly once.
   scopes                = [azurerm_log_analytics_workspace.this.id]
-  evaluation_frequency  = "PT5M"
+  evaluation_frequency  = "PT15M"
   window_duration       = "PT15M"
   target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
 
@@ -230,8 +233,9 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "app_error" {
   # left to default to false.
   auto_mitigation_enabled = true
 
+  # 15 minutes for the same reason as the workload-crashed rule above.
   scopes                = [azurerm_log_analytics_workspace.this.id]
-  evaluation_frequency  = "PT5M"
+  evaluation_frequency  = "PT15M"
   window_duration       = "PT15M"
   target_resource_types = ["Microsoft.OperationalInsights/workspaces"]
 
