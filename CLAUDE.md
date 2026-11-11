@@ -191,7 +191,8 @@ uniqueness does not apply to anything here.
 
 `terraform/` is a **deployable root configuration**, not a reusable module: it
 has its own `provider` block in `versions.tf` and `.terraform.lock.hcl` is
-committed. The Terraform version is pinned in `.terraform-version`.
+committed. The Terraform version is pinned in `mise.toml`, with the other tools (see
+README); CI installs the same versions.
 
 **File layout is enforced, not conventional**: `locals`/`variable`/`output`/
 `data` blocks must live in a matching `locals.tf`/`variables.tf`/`outputs.tf`/
