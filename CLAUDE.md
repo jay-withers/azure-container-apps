@@ -127,9 +127,13 @@ Other decisions not to re-litigate:
 
 - **No availability tests.** A synthetic ping keeps a `min_replicas = 0` app
   permanently warm, which costs more than the outage it would detect.
-- **No diagnostic setting on the environment.** It already ships console and
-  system logs to the workspace via `log_analytics_workspace_id`; a diagnostic
-  setting ingests every line a second time against the shared cap.
+- **One diagnostic setting, scoped to `ContainerAppHTTPLogs` only.** The
+  environment already ships console and system logs to the workspace via
+  `log_analytics_workspace_id`; a diagnostic setting on those categories would
+  ingest every line a second time against the shared cap. HTTP logs are the
+  exception because nothing else ships them. They bill per request, so a
+  high-traffic tenant is the one thing that could move the cap
+  (`main.observability.tf`).
 - **No `AllMetrics` anywhere.** Metrics are already in the platform metric
   store, free to query and free to alert on.
 - **The log-quota alert is evaluated hourly** because reaching the cap stops
