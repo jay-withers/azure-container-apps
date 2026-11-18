@@ -1,4 +1,7 @@
 locals {
+  # How long the event tables keep rows (see main.events.tf).
+  event_table_retention_days = 400
+
   # The custom tables tenants write to through the Logs Ingestion
   # API, and that Grafana reads. Each list is the table's schema *and* the DCR's
   # stream declaration, so the two cannot drift: a column the stream sends but

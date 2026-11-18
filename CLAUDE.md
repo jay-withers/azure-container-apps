@@ -187,6 +187,10 @@ uniqueness does not apply to anything here.
   without any error anywhere, so the two come from one list.
 - **The tables are `azapi_resource`**: azurerm can only manage the retention of
   a custom table that already exists, not create one with columns.
+- **The event tables keep 400 days**, the workspace 30. observability's
+  views go back 90 days and compare with the period before, and a year of
+  `Costs_CL` is worth keeping. The tables are small, so retention past the
+  free 31 days costs pennies. The platform's own logs stay at 30.
 - **Who may send is a role assignment** (`Monitoring Metrics Publisher` on the
   DCR), granted in github-repos next to each deploy identity, never here: a
   pipeline identity cannot create role assignments.
