@@ -24,11 +24,11 @@ resource "azapi_resource" "event_table" {
         name    = each.key
         columns = each.value
       }
-      # 400 days (13 months), past the workspace's free 30, so observability
-      # can show 60 and 90 days with a prior period to compare against, and
-      # keep a year of cost history. The tables take a few hundred small rows a
-      # day, so retention past the free 31 days costs pennies a month. Only
-      # these tables: the platform's own logs stay at the workspace's 30.
+      # 90 days, past the workspace's free 30, so observability's longest
+      # range (90 days) has data all the way back. The tables take a few
+      # hundred small rows a day, so retention past the free 31 days costs
+      # pennies a month. Only these tables: the platform's own logs stay at
+      # the workspace's 30.
       retentionInDays = local.event_table_retention_days
     }
   }
