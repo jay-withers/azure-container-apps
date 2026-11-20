@@ -16,7 +16,6 @@ Analytics free grant.
 | Container Apps environment | yes | |
 | Log Analytics workspace | yes | |
 | Application Insights | yes | |
-| Aspire dashboard (live traces, metrics, logs) | yes | |
 | HTTP request logs (`ContainerAppHTTPLogs`) | yes | |
 | Crash, HTTP-error, log-quota and ops-event alerts, and a budget | yes | |
 | `Deployments_CL`, `OpsEvents_CL`, `Costs_CL` and their ingestion endpoint and rule | yes | sends rows |
@@ -26,9 +25,13 @@ Analytics free grant.
 | Container apps and jobs | | its own |
 | Storage, anything else | | its own |
 
-The Aspire dashboard is at `https://aspire-dashboard.ext.<default domain>`
-(`make outputs` prints the default domain). It reads the OTLP data apps
-already emit, so it costs nothing and ingests nothing into the workspace.
+There is no Aspire dashboard. It was enabled on the environment, never used,
+and taken out of the config on 2026-11-20 (gone once dev is applied). It was
+also the only thing here that could explain Container Apps spend billed to
+this resource group, which hosts no apps, though that was not confirmed by
+meter. It was an `azapi_resource`
+(`Microsoft.App/managedEnvironments/dotNetComponents`) if it is ever wanted
+back.
 
 The split is deliberate. A project can be created, changed and destroyed without
 touching this repository, and its secrets sit in a vault no other project's
