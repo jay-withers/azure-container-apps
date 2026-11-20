@@ -45,17 +45,20 @@ locals {
       { name = "RunUrl", type = "string" },
     ]
 
-    # Daily cost per resource group and service, from Cost Management's query
-    # API, written nightly by observability's schedule-costs. Each run re-sends
-    # the last seven days, because Azure revises a day's figure for about three
-    # afterwards, so readers take the latest row per UsageDate, ResourceGroup and
-    # ServiceName. Cost is ActualCost before any credit: on a Visual Studio
-    # subscription, what the estate would cost on pay-as-you-go.
+    # Daily cost per resource and service, from Cost Management's query API,
+    # written nightly by observability's schedule-costs. Each run re-sends the
+    # last seven days, because Azure revises a day's figure for about three
+    # afterwards, so readers take each UsageDate's rows from the latest run
+    # that posted it. ResourceId is the lower-cased ARM ID (empty on rows from
+    # before it was sent); ResourceGroup is read from it. Cost is ActualCost
+    # before any credit: on a Visual Studio subscription, what the estate
+    # would cost on pay-as-you-go.
     Costs_CL = [
       { name = "TimeGenerated", type = "datetime" },
       { name = "UsageDate", type = "datetime" },
       { name = "ResourceGroup", type = "string" },
       { name = "ServiceName", type = "string" },
+      { name = "ResourceId", type = "string" },
       { name = "Cost", type = "real" },
       { name = "Currency", type = "string" },
       { name = "RunUrl", type = "string" },
