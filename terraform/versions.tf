@@ -18,9 +18,8 @@ terraform {
       version = ">= 3.3.2"
     }
 
-    # Only for the Aspire Dashboard dotnet component: azurerm has no resource
-    # for it (hashicorp/terraform-provider-azurerm#28187, still open), so it's
-    # managed as a raw ARM call instead. Remove this the day that issue ships.
+    # Only for the custom tables (main.events.tf): azurerm can manage a
+    # table's retention but not create its schema.
     azapi = {
       source  = "Azure/azapi"
       version = "~> 2.0"
