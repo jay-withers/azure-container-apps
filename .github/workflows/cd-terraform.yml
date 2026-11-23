@@ -35,7 +35,7 @@ jobs:
       id-token: write
       contents: read
       issues: write # the deploy-failed issue
-    uses: jay-withers/workflows/.github/workflows/terraform-deploy.yml@94117dc43f63b0b479c4aac0492b63d90d5f8d6e # v1.31.4
+    uses: jay-withers/workflows/.github/workflows/terraform-deploy.yml@f748462468ce1fc5b385413fba07e41afc28c1db # v1.32.2
     with:
       environment: dev
       apply: ${{ github.event_name == 'workflow_dispatch' }}
